@@ -11,38 +11,15 @@ public class BossGUI : MonoBehaviour
     /// </summary>
     public Text bossName;
     public Slider bossSlider;
-    public int damage = 10;
+    public static int damage = 10;
 
-    void Awake()
+    public void ToggleBossGUI(bool state)
     {
-       // GUIManager.instance.TurnOff(bossSlider.gameObject);
-       // GUIManager.instance.TurnOff(bossName.gameObject);
+        GUIManager.instance.Activate("UIBoss", state);
     }
 
-    //void Update()
-    //{
-    //    if (Input.GetKeyDown(KeyCode.A))
-    //    {
-    //        GUIManager.instance.TurnOn(bossName.gameObject);
-    //        GUIManager.instance.TurnOn(bossSlider.gameObject);
-    //        Debug.Log(gameObject + "On");
-    //    }
-
-    //    if (Input.GetKeyDown(KeyCode.D))
-    //    {
-    //        GUIManager.instance.TurnOff(bossName.gameObject);
-    //        GUIManager.instance.TurnOff(bossSlider.gameObject);
-    //        Debug.Log(gameObject + "Off");
-    //    }
-    //}
-
-    void bossGUI()
+    public void HPChange(int dmg)
     {
-        // When the boss appears, I need to turn on the bossSlider and bossName on.
-        if (bossSlider.value == 0)
-        {
-            GUIManager.instance.TurnOff(bossSlider.gameObject);
-            GUIManager.instance.TurnOff(bossName.gameObject);
-        }
+        bossSlider.value = dmg;
     }
 }

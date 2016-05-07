@@ -1,79 +1,126 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using System.Collections;
 
 public class EntityManager : MonoBehaviour
 {
     void Awake()
     {
-        Camera camera = Camera.main;
-
-        Vector3 tl = new Vector3(0,                 camera.pixelHeight, 0);
-        Vector3 tr = new Vector3(camera.pixelWidth, camera.pixelHeight, 0);
-        Vector3 bl = new Vector3(0,                 0,                  0);
-        Vector3 br = new Vector3(camera.pixelWidth, 0,                  0);
-
-        m_topLeft       = camera.ScreenToWorldPoint(tl);
-        m_topRight      = camera.ScreenToWorldPoint(tr);
-        m_bottomLeft    = camera.ScreenToWorldPoint(bl);
-        m_bottomRight   = camera.ScreenToWorldPoint(br);
-
-        m_topLeft.z = m_topRight.z = m_bottomLeft.z = m_bottomRight.z = 0;
+        m_currentWave = 0;  // Sets the first wave to 0
+        SpawnNextWave();    // Spawns the first wave of entities
     }
-    	
-	// Update is called once per frame
-	void Update ()
+
+    void Update()
     {
-        foreach (Entity e in m_entities)
+        
+        //if (Entities.Count == 1)// && Entities[0].GetComponent<LgEnemy>())// != null)
+        //{
+        //    if(Entities[0].GetType() == typeof(LgEnemy))
+        //        if (Entities[0].GetComponent<LgEnemy>().SmEnemy.Count == 0)
+        //            Entities[0].GetComponent<LgEnemy>().CallForHelp();
+        //}
+
+
+        if (Entities.Count > 0 && Reset == false)                                                 // Makes sure that there are still entities alive
         {
-            e.spawnTimer += Time.deltaTime;
-
-            if (e.spawnTimer * e.spawnRate > m_spawnDelay)
+            foreach (GameObject e in Entities)                                      // For each entity that we are managing
             {
-                Vector3 spawnPoint =
-                    new Vector3(Random.Range(m_topRight.x, m_topRight.x + 1.0f),
-                                Random.Range(m_bottomRight.y + 1.0f, m_topRight.y - 1.0f),
-                                0);
-
-                GameObject go = Instantiate(e.entity, spawnPoint, e.entity.transform.localRotation) as GameObject;
-
-                m_spawnedObjects.Add(go);
-
-                e.spawnTimer = 0;
-            }
-        }
-
-        foreach(GameObject go in m_spawnedObjects)
-        {
-            if (go)
-            {
-                if (go.transform.position.x < m_bottomLeft.x - 1)
+                if(e)
                 {
-                    m_spawnedObjects.Remove(go);
-                    Destroy(go);
+                    if (e.transform.position.x < ScreenBorders.m_bottomLeft.x - 10)
+                    {
+                        Destroy(e);
+                    }
+                }
+
+                if (!e)                 // Sees if the entity has been destroyed
+                {
+                    print("Dead");
+                    Entities.Remove(e);     // Remove them from the list
+                    //Destroy(e);
+                    for (int i = 0; i < Entities.Count; i++)
+                    {
+                        if (Entities[i].GetComponent<LgEnemy>())
+                        {
+                            if (i == Entities.Count - 1)
+                            {
+                                Entities[i].GetComponent<LgEnemy>().CallForHelp();
+                            }
+                            else
+                            {
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            return;                 // and restart the check
+                        }
+                    }
                     return;
+
                 }
             }
         }
-	}
 
-    public float m_spawnDelay = 1;
+        else if(Reset == true)
+        {
+            print("Reset");
+            foreach(GameObject e in Entities)
+            {
+                Destroy(e);
+            }
+            Reset = false;
+            SpawnNextWave();
+        }
+        else if(++m_currentWave < EntityWaves.Count)    // If all the entites are dead
+        {
+            print("wave");// AND there is a NEXT wave
+            SpawnNextWave();                            // spawn the next wave
+        }
+        else
+        {
+            StartCoroutine(EndWait());
+        }
+    }
 
-    Vector3 m_topLeft;
-    Vector3 m_topRight;
-    Vector3 m_bottomLeft;
-    Vector3 m_bottomRight;
+    void SpawnNextWave()
+    {
+        GameObject wave = // The current wave we are spawning
+            Instantiate(EntityWaves[m_currentWave], transform.position, transform.localRotation) as GameObject;
 
-    public List<Entity> m_entities = new List<Entity>();
+        Entities = new List<GameObject>();                  // Makes sure the old list of entities are clear
+        for(int i = 0; i < wave.transform.childCount; ++i)      // and for every new entity the the new wave
+        {
+            Entities.Add(wave.transform.GetChild(i).gameObject);    // Add them to the new list of entites
+        }
 
-    List<GameObject> m_spawnedObjects = new List<GameObject>();
-}
+        wave.transform.DetachChildren();    // Unparent them from the wave
+        Destroy(wave);                      // and destroy the now empty wave
+    }
 
-[System.Serializable]
-public class Entity
-{
-    public GameObject entity;
-    [Range(0.0f, 1.0f)]
-    public float spawnRate = 1.0f;
-    [HideInInspector]
-    public float spawnTimer = 0.0f;
+    public static bool Reset = false;
+
+    IEnumerator EndWait()
+    {
+        yield return new WaitForSeconds(3.0f);
+        GameStates.ChangeState("GameOver");
+    }
+
+    public static void ResetWave()
+    {
+        Reset = true;
+        foreach(GameObject g in Entities)
+        {
+            if(g.GetComponent<LgEnemy>())
+            {
+                foreach (GameObject go in g.GetComponent<LgEnemy>().SmEnemy)
+                    Destroy(go);
+            }
+        }
+    }
+
+    private int m_currentWave;
+
+    public List<GameObject> EntityWaves = new List<GameObject>();
+    public static List<GameObject> Entities = new List<GameObject>();
 }

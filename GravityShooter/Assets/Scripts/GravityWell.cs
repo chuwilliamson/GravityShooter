@@ -4,7 +4,7 @@ using System.Collections.Generic;
 /// <summary>
 /// A rail system for objects in a "GravityWell"
 /// </summary>
-public class GravityWell : MonoBehaviour
+public class GravityWell : Singleton<GravityWell>
 {
     void FixedUpdate()
     {
@@ -13,10 +13,13 @@ public class GravityWell : MonoBehaviour
             if (g.entity)
             {
                 float speed = (Time.deltaTime * m_speedModifier);
+                float toWell = Vector3.Distance(g.entity.transform.position, gameObject.transform.position);
 
                 switch (g.state)
                 {
                     case GRAV.INIT:
+                        gameObject.GetComponent<AudioSource>().pitch += 0.25f;
+                        g.entity.GetComponent<Projectile>().isEnemy = false;
                         g.state = GRAV.ENTER;
                         break;
 
@@ -38,10 +41,10 @@ public class GravityWell : MonoBehaviour
                         if (toBreak > 0.1f)
                         {
                             g.entity.transform.RotateAround(transform.position, Vector3.forward *
-                                (g.entry.x / Mathf.Abs(g.entry.x) * g.entry.y / Mathf.Abs(g.entry.y)),
-                                g.velocity.magnitude * speed * 100);
 
-                            Debug.DrawLine(g.entity.transform.position, transform.position);
+                                (g.thres.y < 0 ? -1 : 1),
+
+                                g.velocity.magnitude * speed * 100/toWell);
                         }
                         else
                         {
@@ -58,6 +61,7 @@ public class GravityWell : MonoBehaviour
                     case GRAV.END:
                         m_gravObjects.Remove(g);
                         g.entity.transform.parent = null;
+                        gameObject.GetComponent<AudioSource>().pitch -= 0.25f;
                         return;
                 };
             }

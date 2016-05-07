@@ -17,9 +17,9 @@ public class GameStates : Singleton<GameStates>
         count
     }
 
-    protected FSM<GAMESTATE> _fsm;
+    protected static FSM<GAMESTATE> _fsm = new FSM<GAMESTATE>();
 
-    private GameStates Instance;
+    private GameStates Instance; //Used to get the instance of the Gamestate
     public GameStates _instance
     {
         get
@@ -28,15 +28,20 @@ public class GameStates : Singleton<GameStates>
         }
     }
 
-    private Player player;
-    private GravityWell gravityWell;
-    private string PlayerName = "Player";
-    private string GravityWellName = "GravityWell";
+    private static Player player; //Refrence to the player
+    private static GravityWell gravityWell; //Refrence to the gravitywel
+    private static EntityManager WaveSpawner; //Refrece to the wave spawner
+    private static string SpawnerName = "Spawner"; //Name used to load the Spawner into the game
+    private static string PlayerName = "Player"; //Name used to load the Player into the game
+    private static string GravityWellName = "GravityWell"; //Name used to load the GravityWell into the game
+
+    public static bool ExitGamePlay = false; //Check for if we are exiting the game
 
     protected override void Awake()
     {
         base.Awake();
-        _fsm = new FSM<GAMESTATE>();
+        if(_fsm == null)
+            _fsm = new FSM<GAMESTATE>();
         AddState();
         AddTransiton();
         Instance = this;
@@ -44,7 +49,7 @@ public class GameStates : Singleton<GameStates>
 
     void Start()
     {
-        _fsm.Transition(_fsm.state ,GAMESTATE.mainMenu);
+        StateProperties();
     }
 
     /// <summary>
@@ -93,21 +98,28 @@ public class GameStates : Singleton<GameStates>
         _fsm.AddTransition(GAMESTATE.gameOver, GAMESTATE.mainMenu, false);
         //endGame -> exit
         _fsm.AddTransition(GAMESTATE.gameOver, GAMESTATE.exit, false);
-        
-         
-
     }
 
-    void StateProperties()
+    /// <summary>
+    /// Defines all actions that can happen depending the state the game is in
+    /// </summary>
+    static void StateProperties()
     {
+        ExitGamePlay = false;
         switch(_fsm.state)
         {
             case GAMESTATE.init:
                 _fsm.Transition(_fsm.state, GAMESTATE.mainMenu);
                 break;
             case GAMESTATE.mainMenu:
+                Time.timeScale = 1;
+                if (player != null)
+                    Destroy(player.gameObject);
+                if (gravityWell != null)
+                    Destroy(gravityWell.gameObject);
                 break;
             case GAMESTATE.gamePlay:
+                Time.timeScale = 1;
                 player = Instantiate(Resources.Load(PlayerName, typeof(Player))) as Player;
                 gravityWell = Instantiate(Resources.Load(GravityWellName, typeof(GravityWell))) as GravityWell;
                 break;
@@ -116,29 +128,75 @@ public class GameStates : Singleton<GameStates>
             case GAMESTATE.gameOver:
                 Destroy(player.gameObject);
                 Destroy(gravityWell.gameObject);
+                GUIMenuManager.GameOver();
                 break;
             case GAMESTATE.exit:
                 break;
         }
-        Debug.Log(_fsm.state);
     }
 
+    //Transitions the game to the game over state
     void GameOver()
     {
         _fsm.Transition(_fsm.state, GAMESTATE.gameOver);
         StateProperties();
     }
 
-    void FixedUpdate()
+    //Changes the current state of the game
+    public static void ChangeState(string GameState)
     {
-        if (Input.GetKeyDown(KeyCode.T) && FindObjectOfType<Player>() == null)
+        switch (GameState)
+        {
+            case "MainMenu":
+                LevelLoader.LoadLevel("Main_Menu");
+                _fsm.Transition(_fsm.state, GAMESTATE.mainMenu);
+                break;
+            case "Game":
+                LevelLoader.LoadLevel("Level_One");
+                _fsm.Transition(_fsm.state, GAMESTATE.gamePlay);
+                break;
+            case "GameOver":
+                LevelLoader.LoadLevel("GameOver");
+                _fsm.Transition(_fsm.state, GAMESTATE.gameOver);
+                break;
+            default:
+                break;
+        }
+        StateProperties();
+    }
+
+    void Update()
+    {
+
+        if (_fsm.state == GAMESTATE.init)
+            _fsm.Transition(_fsm.state, GAMESTATE.mainMenu);
+
+        if (Input.GetKeyDown(KeyCode.T))
         {
             _fsm.Transition(_fsm.state, GAMESTATE.gamePlay);
             StateProperties();
         }
-        if (Input.GetKeyDown(KeyCode.R))
+
+        if (Input.GetKeyDown(KeyCode.Escape))
         {
-            SceneManager.LoadScene("MainTesting");
+            PauseGame();
+        }
+    }
+
+    //Pause the game 
+    public static void PauseGame()
+    {
+        if (Time.timeScale != 0)
+        {
+            Time.timeScale = 0;
+            _fsm.Transition(_fsm.state, GAMESTATE.pauseMenu);
+            GUIMenuManager.PauseButton();
+        }
+        else
+        {
+            Time.timeScale = 1;
+            GUIMenuManager.ResumeButton();
+            _fsm.Transition(_fsm.state, GAMESTATE.gamePlay);
         }
     }
 }

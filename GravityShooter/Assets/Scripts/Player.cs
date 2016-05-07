@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System;
 
-public class Player : MonoBehaviour
+public class Player : Singleton<Player>
 {
     /// <summary>
     /// Enum values used to represent each of the states the
@@ -58,6 +58,9 @@ public class Player : MonoBehaviour
     [SerializeField]
     private int livesRemaining; //Curremt lives the player has remainng before game over
 
+    [SerializeField]
+    static bool shield = false;
+
     [Header("Movement")]
     [SerializeField]
     private float movementSpeed; //Speed at which the player is accelerating at
@@ -68,35 +71,39 @@ public class Player : MonoBehaviour
     private Vector3 acceleration; //Rate at which the player is gaining speed towards its max velocity
 
     [SerializeField]
-    private Vector3 startPosition = new Vector3(-8, 1, 0);
+    private Vector3 startPosition = new Vector3(-8, 0, 0); //Positon the player is spawned at when created
     [SerializeField]
-    private Vector3 spawnPosition = new Vector3(-10, 1, 0);
+    private Vector3 spawnPosition = new Vector3(-10, 0, 0); //Position the player flys toward when spawning in to the game scene
 
     private float buttonDownTime; //Used to move the player faster of slower depending on the time between key pressed and key up
 
-
-    private PlayerGUI playerUI;
-
-    private bool atTop;
-    private bool atBot;
     [SerializeField]
-    private bool atLeft;
-    private bool atRight;
+    private bool atTop; //Value to say if the player has reached the top of the screen
+    [SerializeField]
+    private bool atBot; //Value to say if the player has reached the bottom of the screen
+    [SerializeField]
+    private bool atLeft; //Value to say if the player has reached the left of the screen
+    [SerializeField]
+    private bool atRight; //Value to say if the player has reached the right of the screen
 
     [SerializeField]
-    private GravityWell well;
+    private GravityWell well; //Refrence to the gravity well the player tows around
 
     [SerializeField]
     private float padding = 0.5f;
     //Power ups will go here later on in development
+    [SerializeField]
+    public static  PlayerGUI playerGUI;
+      
 
     /// <summary>
     /// Function Calls
     /// AddToFSM()
     /// PlayerListen()
     /// </summary>
-    void Awake()
+    protected override void Awake()
     {
+        base.Awake();
         _fsm = new FSM<PLAYERSTATES>();
         AddToFSM();
     }
@@ -107,23 +114,19 @@ public class Player : MonoBehaviour
     /// </summary>
     void Start()
     {
-        gameObject.name = "Player";
-        CheckPlayerBounds();
-        currentHealth = maxHealth;
-        livesRemaining = maxLives;
-        SetPlayerControls();
-        well = FindObjectOfType<GravityWell>();
-        playerUI = FindObjectOfType<PlayerGUI>();
+        gameObject.name = "Player"; //Changes the name of the object to Player
+        CheckPlayerBounds(); //Checks to see if the player in within the game play area
+        currentHealth = maxHealth; //Sets the current health equal to the maximumHealth
+        livesRemaining = maxLives; //Sets the lives remaining equal the the max lives
+        SetPlayerControls(); //Sets the controls the user uses to control the player
+        well = FindObjectOfType<GravityWell>(); //Searchs for an object of type GravityWell and sets the return value equal to the well
         foreach(SpringJoint2D s in gameObject.GetComponents<SpringJoint2D>())
         {
-            s.connectedBody = well.GetComponent<Rigidbody2D>();
+            s.connectedBody = well.GetComponent<Rigidbody2D>(); //Sets the connected body of the springs attached to the player equal to the well's rigidbody
         }
-        well.transform.position = new Vector3(spawnPosition.x - 2, spawnPosition.y, spawnPosition.z);
-        transform.position = spawnPosition;
-        _fsm.Transition(_fsm.state, PLAYERSTATES.dead);
-        //_fsm.Transition(_fsm.state, PLAYERSTATES.idle);
-        // playerUI.PlayerBarGUI(currentHealth);
-        GUIManager.instance.ChangeHealth(currentHealth);
+        well.transform.position = new Vector3(spawnPosition.x - 2, spawnPosition.y, spawnPosition.z); //Sets the wells position to just behind the player
+        transform.position = spawnPosition; //Sets the player's position to be just out side the play area
+        _fsm.Transition(_fsm.state, PLAYERSTATES.dead); //Transitions the player to the dead state so it will start its spawning movement
     }
 
     /// <summary>
@@ -155,21 +158,24 @@ public class Player : MonoBehaviour
         _fsm.AddTransition(PLAYERSTATES.dead, PLAYERSTATES.destroyed, false);
     }
 
+    public bool GODMODE = false;
+
     /// <summary>
     /// Handles all the behavior that needs to happed every frame
     /// </summary>
     void Update()
     {
+        if (Input.GetKeyDown(KeyCode.N))
+            GODMODE = !GODMODE;
         gameObject.GetComponent<LineRenderer>().SetPosition(0, transform.position);
         gameObject.GetComponent<LineRenderer>().SetPosition(1, well.transform.position);
-
-        if (Input.GetKeyDown(KeyCode.C))
-            PlayerDamage();
 
         PlayerSpawn();
 
         if (_fsm.state != PLAYERSTATES.dead)
         {
+            PlayerMouseMovement();
+
             PlayerMovement();
             if (buttonDownTime == 0)
                 _fsm.Transition(_fsm.state, PLAYERSTATES.idle);
@@ -220,6 +226,10 @@ public class Player : MonoBehaviour
         {
             if (Input.GetKey(kc))
             {
+                if(_fsm.state != PLAYERSTATES.flying)
+                {
+                    _fsm.Transition(_fsm.state, PLAYERSTATES.flying);
+                }
                 buttonDownTime = Time.deltaTime * movementSpeed;
                 switch (kc)
                 {
@@ -240,40 +250,32 @@ public class Player : MonoBehaviour
             if(Input.GetKeyUp(kc))
             {
                 buttonDownTime = 0;
+                acceleration = Vector3.zero;
+                _fsm.Transition(_fsm.state, PLAYERSTATES.idle);
             }         
         }
     }
 
-    /// <summary>
-    /// When the player hears a message it is listening for this function is called
-    /// It will parse the msg and depending on the message it recives different functions
-    /// will be called
-    /// </summary>
-    /// <param name="msg">
-    /// msg is the message the player was listening for
-    /// </param>
-    void PlayerActionTriggers(string msg)
+    void PlayerMouseMovement()
     {
-        //parses through the message and divides it twice once at the ':' and once and the '_'
-        string[] temp = msg.Split(':','_');
-        //Checks to see if the string at the index after the first split which is after the ':' character equals "Movement"
-        if (temp[1] == "Movement")
+        if(Input.GetMouseButton(0))
         {
-            //If true we will call PlayerMovement  and pass the string at the third index as an arguement
-            //into the function call
-            _fsm.Transition(_fsm.state, PLAYERSTATES.flying);
+            buttonDownTime = Time.deltaTime * movementSpeed;
+            Vector3 screenPoint = Input.mousePosition;
+            screenPoint.z = 10;
+            acceleration -= (transform.position - Camera.main.ScreenToWorldPoint(screenPoint)).normalized;
+        }
+        if(Input.GetMouseButtonUp(0))
+        {
+            buttonDownTime = 0;
         }
     }
 
     void OnTriggerEnter2D(Collider2D c)
     {
-        if (c.GetComponent<Projectile>() != null)
+        if (c.GetComponent<Projectile>() != null || c.GetComponent<SmEnemy>() != null && _fsm.state != PLAYERSTATES.dead)
         {
-            PlayerDamage();
-            Destroy(c.gameObject);
-        }
-        if(c.GetComponent<SmallEnemy>() != null)
-        {
+            Instantiate(Resources.Load("MultiExsplosion"), c.transform.position, c.transform.localRotation);
             PlayerDamage();
             Destroy(c.gameObject);
         }
@@ -284,50 +286,49 @@ public class Player : MonoBehaviour
     /// and also does the checks to see how much health the player has left
     /// along with how many lives it has remaning.
     /// </summary>
-    void PlayerDamage()
+    [ContextMenu("DMG")]
+    public void PlayerDamage()
     {
+        
         _cAction = PLAYERACTIONS.takeDamage;
-        currentHealth -= 1;
-        if(currentHealth == 0)
+        if (shield != true)
+            currentHealth -= 1;
+        else
         {
+            shield = false;
+            AddShield(shield);
+        }
+
+        if(playerGUI != null)
+            playerGUI.HPChange(currentHealth);
+
+        if (currentHealth == 0)
+        {
+            Instantiate(Resources.Load("BigExsplosion"), transform.position, transform.localRotation);
+            EntityManager.ResetWave();
+            acceleration = Vector3.zero;
+            velocity = Vector3.zero;
+            FindObjectOfType<AudioManager>().PlayExplodeAudio();
             _fsm.Transition(_fsm.state, PLAYERSTATES.dead);
             livesRemaining -= 1;
             if (livesRemaining >= 0)
             {
+                LivesRemaining.RemoveLife();
                 _cAction = PLAYERACTIONS.die;
-                GetComponent<MeshRenderer>().enabled = false;
                 transform.position = spawnPosition;
                 well.transform.position = spawnPosition;
                 PlayerSpawn();
                 currentHealth = maxHealth;
+                if (GODMODE == true)
+                    livesRemaining += 1;
             }
             else if (livesRemaining < 0)
             {
                 _fsm.Transition(_fsm.state, PLAYERSTATES.destroyed);
+                GameStates.ChangeState("GameOver");
             }
         }
-        GUIManager.instance.ChangeHealth(currentHealth);
-    }
 
-    /// <summary>
-    /// Handles the transitions between the player animations
-    /// Will be completed once we have animations to work with
-    /// </summary>
-    void PlayerAnimation()
-    {
-        switch(_cAction)
-        {
-            case PLAYERACTIONS.takeDamage:
-                //Plays the damage animation
-                break;
-            case PLAYERACTIONS.die:
-                //Plays the death animation
-                break;
-            case PLAYERACTIONS.spawn:
-                //Plays the spawn animation
-                break;
-
-        }
     }
 
     /// <summary>
@@ -335,8 +336,11 @@ public class Player : MonoBehaviour
     /// </summary>
     void PlayerSpawn()
     {
-        GetComponent<MeshRenderer>().enabled = true;
-        if (Vector3.Distance(transform.position, startPosition) > .1 && _fsm.state == PLAYERSTATES.dead)
+        if(playerGUI == null)
+            playerGUI = FindObjectOfType<PlayerGUI>();
+        if(playerGUI != null)
+            playerGUI.HPChange(currentHealth);
+        if (Vector3.Distance(transform.position, startPosition) > .5 && _fsm.state == PLAYERSTATES.dead)
         {
             transform.position += new Vector3(1, 0, 0) * (Time.deltaTime * movementSpeed);
         }
@@ -344,7 +348,6 @@ public class Player : MonoBehaviour
         {
             _fsm.Transition(_fsm.state, PLAYERSTATES.idle);
         }
-
     }
 
     /// <summary>
@@ -399,5 +402,11 @@ public class Player : MonoBehaviour
         PlayerControls.Add(KeyCode.S);
         PlayerControls.Add(KeyCode.D);
         PlayerControls.Add(KeyCode.A);
+    }
+
+    public static void AddShield(bool s)
+    {
+        shield = s;
+        playerGUI.ShieldChange(shield);    
     }
 }
