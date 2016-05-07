@@ -55,8 +55,9 @@ public class GUIManager : Singleton<GUIManager>
         {
             m_elements[name].SetActive(state);
         }
-        else
-            Debug.Log("No element with name: " + name + " was registered with the GUIManager, but you're trying to activate it.");
+    //    else
+
+    //       // Debug.Log("No element with name: " + name + " was registered with the GUIManager, but you're trying to activate it.");
     }
 
     /// <summary>

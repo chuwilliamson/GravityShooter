@@ -141,6 +141,10 @@ public class GameStates : Singleton<GameStates>
         _fsm.Transition(_fsm.state, GAMESTATE.gameOver);
         StateProperties();
     }
+    public void ChangeStateTest(string s)
+    {
+        GameStates.ChangeState(s);
+    }
 
     //Changes the current state of the game
     public static void ChangeState(string GameState)
